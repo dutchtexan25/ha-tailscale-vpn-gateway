@@ -17,8 +17,6 @@ privileged:
 kernel_modules: true
 ports:
   41641/udp: 41641
-ports_description:
-  41641/udp: Tailscale UDP transport
 options:
   nordvpn_token: ""
   nordvpn_target: San_Francisco
