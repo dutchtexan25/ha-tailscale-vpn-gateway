@@ -153,19 +153,33 @@ def configure_wireguard(key, server):
     WG_CONF.chmod(0o600)
 
 
-def ensure_iptables_rule(args, position=None):
+def ensure_iptables_rule(table, chain, rule, position=None):
     """Install a firewall rule once; reconnects must not grow duplicate rules."""
-    if run(["iptables", "-C"] + args, check=False).returncode == 0:
+    base = ["iptables", "-t", table]
+    check = subprocess.run(
+        base + ["-C", chain] + rule,
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
+    if check.returncode == 0:
         return
     if position is None:
-        run(["iptables", "-A"] + args)
+        run(base + ["-A", chain] + rule)
     else:
-        run(["iptables", "-I", args[0], str(position)] + args[1:])
+        run(base + ["-I", chain, str(position)] + rule)
 
 
-def ensure_ip6tables_rule(args):
-    if run(["ip6tables", "-C"] + args, check=False).returncode != 0:
-        run(["ip6tables", "-I"] + args, check=False)
+def ensure_ip6tables_rule(chain, rule, position=None):
+    base = ["ip6tables"]
+    check = subprocess.run(
+        base + ["-C", chain] + rule,
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
+    if check.returncode == 0:
+        return
+    if position is None:
+        run(base + ["-A", chain] + rule, check=False)
+    else:
+        run(base + ["-I", chain, str(position)] + rule, check=False)
 
 
 def install_gateway_rules():
@@ -181,19 +195,22 @@ def install_gateway_rules():
         ])
     # Fail closed: Tailscale-forwarded IPv4 packets can only leave via wg0.
     ensure_iptables_rule(
-        ["FORWARD", "-i", "tailscale0", "-o", "wg0", "-j", "ACCEPT"], 1
+        "filter", "FORWARD", ["-i", "tailscale0", "-o", "wg0", "-j", "ACCEPT"], 1
     )
-    ensure_iptables_rule(["FORWARD", "-i", "tailscale0", "-j", "DROP"], 2)
-    ensure_iptables_rule([
-        "FORWARD", "-i", "wg0", "-o", "tailscale0",
-        "-m", "conntrack", "--ctstate", "ESTABLISHED,RELATED", "-j", "ACCEPT",
-    ], 1)
     ensure_iptables_rule(
-        ["-t", "nat", "POSTROUTING", "-o", "wg0", "-j", "MASQUERADE"]
+        "filter", "FORWARD", ["-i", "tailscale0", "-j", "DROP"], 2
+    )
+    ensure_iptables_rule(
+        "filter", "FORWARD",
+        ["-i", "wg0", "-o", "tailscale0", "-m", "conntrack",
+         "--ctstate", "ESTABLISHED,RELATED", "-j", "ACCEPT"], 1
+    )
+    ensure_iptables_rule(
+        "nat", "POSTROUTING", ["-o", "wg0", "-j", "MASQUERADE"]
     )
     # NordVPN does not provide IPv6 egress here. Explicitly block forwarded
     # IPv6 from tailnet peers instead of allowing an ISP-route leak.
-    ensure_ip6tables_rule(["FORWARD", "1", "-i", "tailscale0", "-j", "DROP"])
+    ensure_ip6tables_rule("FORWARD", ["-i", "tailscale0", "-j", "DROP"], 1)
 
 
 def tunnel_egress_ok():
