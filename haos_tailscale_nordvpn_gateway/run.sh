@@ -40,4 +40,7 @@ if ! command -v wg >/dev/null || ! ip link add wg-test type wireguard 2>/dev/nul
 fi
 ip link del wg-test 2>/dev/null || true
 
+sysctl -w net.ipv4.ip_forward=1
+sysctl -w net.ipv6.conf.all.forwarding=0
+
 python3 /gateway.py
