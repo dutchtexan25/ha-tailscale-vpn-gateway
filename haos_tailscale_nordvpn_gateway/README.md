@@ -26,7 +26,7 @@ dataplane milestone.
 2. In Home Assistant, open **Settings → Apps → App store → ⋮ → Repositories**.
 3. Add this repository URL:
    `https://github.com/dutchtexan25/ha-tailscale-vpn-gateway`
-4. Find **Tailscale NordVPN Exit Gateway** under the local apps section.
+4. Find **Tailscale NordVPN Exit Gateway** under this repository in the app store.
 5. Configure `nordvpn_token` with a NordVPN access token, and optionally set
    `nordvpn_target` (country or city, default `San_Francisco`).
 6. Configure a Tailscale auth key in `tailscale_auth_key` (recommended for
