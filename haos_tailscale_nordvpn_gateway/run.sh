@@ -24,6 +24,7 @@ export NORDVPN_TARGET="$(option nordvpn_target)"
 export TAILSCALE_AUTH_KEY="$(option tailscale_auth_key)"
 export TAILSCALE_HOSTNAME="$(option tailscale_hostname)"
 export RECONNECT_AFTER_HOURS="$(option reconnect_after_hours)"
+export ADVERTISE_EXIT_NODE="$(option advertise_exit_node)"
 
 log() { printf '[gateway] %s\n' "$*"; }
 
