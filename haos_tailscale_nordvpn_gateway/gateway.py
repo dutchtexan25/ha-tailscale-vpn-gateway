@@ -36,6 +36,7 @@ CLIENT_ADDR = "10.5.0.2/32"
 TOKEN = os.environ.get("NORDVPN_TOKEN", "").strip()
 TARGET = os.environ.get("NORDVPN_TARGET", "auto").strip()
 AUTH_KEY = os.environ.get("TAILSCALE_AUTH_KEY", "").strip()
+ADVERTISE_EXIT_NODE = os.environ.get("ADVERTISE_EXIT_NODE", "false").strip().lower() == "true"
 HOSTNAME = os.environ.get("TAILSCALE_HOSTNAME", "ha-nordvpn-gateway").strip()
 ROTATE_HOURS = max(1, int(os.environ.get("RECONNECT_AFTER_HOURS", "168")))
 STOP = False
@@ -290,7 +291,10 @@ def main():
     run(["sysctl", "-w", "net.ipv6.conf.all.forwarding=0"], check=False)
     connect_vpn()
     daemon, sock = start_tailscale()
-    advertise_exit_node(sock)
+    if ADVERTISE_EXIT_NODE:
+        advertise_exit_node(sock)
+    else:
+        LOG.info("Exit-node advertising is disabled; VPN tunnel is up for initial validation.")
     LOG.info("Gateway ready; Home Assistant host routes are not modified.")
     rotate_at = time.monotonic() + ROTATE_HOURS * 3600
     failures = 0
@@ -302,11 +306,13 @@ def main():
             failures += 1
             if failures >= 3 or time.monotonic() >= rotate_at:
                 LOG.warning("Rotating NordVPN tunnel.")
-                run(["tailscale", "--socket", sock, "set", "--advertise-exit-node=false"], check=False)
+                if ADVERTISE_EXIT_NODE:
+                    run(["tailscale", "--socket", sock, "set", "--advertise-exit-node=false"], check=False)
                 run(["wg-quick", "down", str(WG_CONF)], check=False)
                 connect_vpn()
-                install_gateway_rules()
-                run(["tailscale", "--socket", sock, "set", "--advertise-exit-node"])
+                if ADVERTISE_EXIT_NODE:
+                    install_gateway_rules()
+                    run(["tailscale", "--socket", sock, "set", "--advertise-exit-node"])
                 rotate_at = time.monotonic() + ROTATE_HOURS * 3600
                 failures = 0
         else:
