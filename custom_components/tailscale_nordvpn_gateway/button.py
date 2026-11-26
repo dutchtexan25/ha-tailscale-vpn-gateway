@@ -11,9 +11,12 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
 
 class GatewayRestartButton(GatewayEntity, ButtonEntity):
-    _attr_name = "Reconnect gateway"
+    _attr_name = "Restart gateway"
     _attr_icon = "mdi:restart"
+
+    def __init__(self, coordinator, entry):
+        super().__init__(coordinator, entry)
+        self._attr_unique_id = f"{entry.data['app_slug']}_restart"
 
     async def async_press(self) -> None:
         await self.coordinator.api.restart()
-        await self.coordinator.async_request_refresh()
