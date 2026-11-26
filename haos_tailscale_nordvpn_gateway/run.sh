@@ -41,7 +41,25 @@ if ! command -v wg >/dev/null || ! ip link add wg-test type wireguard 2>/dev/nul
 fi
 ip link del wg-test 2>/dev/null || true
 
-sysctl -w net.ipv4.ip_forward=1
-sysctl -w net.ipv6.conf.all.forwarding=0
+# Home Assistant OS app containers cannot write host-wide sysctls. Read the
+# current host values instead; never try to change them from inside this app.
+IPV4_FORWARDING="$(cat /proc/sys/net/ipv4/ip_forward 2>/dev/null || echo unknown)"
+IPV6_FORWARDING="$(cat /proc/sys/net/ipv6/conf/all/forwarding 2>/dev/null || echo unknown)"
+log "Host IPv4 forwarding: $IPV4_FORWARDING"
+log "Host IPv6 forwarding: $IPV6_FORWARDING"
+
+# Forwarding is only required when this app is configured to advertise an
+# exit node. Fail closed if the host is not already in the expected state.
+if [ "$ADVERTISE_EXIT_NODE" = "true" ]; then
+  if [ "$IPV4_FORWARDING" != "1" ]; then
+    log "ERROR: Exit-node mode requires host IPv4 forwarding to be enabled."
+    exit 1
+  fi
+  if [ "$IPV6_FORWARDING" != "0" ]; then
+    log "ERROR: Exit-node mode requires host IPv6 forwarding to be disabled."
+    log "No host sysctl values were changed."
+    exit 1
+  fi
+fi
 
 python3 /gateway.py
