@@ -1,7 +1,6 @@
 """Data coordinator."""
 from __future__ import annotations
 
-import asyncio
 import logging
 import re
 from datetime import datetime, timezone
@@ -24,11 +23,16 @@ class GatewayCoordinator(DataUpdateCoordinator):
 
     async def _async_update_data(self) -> dict:
         try:
-            info, logs = await asyncio.gather(
-                self.api.get_info(), self.api.get_logs()
-            )
+            info = await self.api.get_info()
         except GatewayApiError as err:
             raise UpdateFailed(str(err)) from err
+
+        # Logs are supplementary: status and controls should remain available
+        # even if this Supervisor version does not expose the latest-log route.
+        try:
+            logs = await self.api.get_logs()
+        except GatewayApiError:
+            logs = ""
 
         options = info.get("options", {})
         state = str(info.get("state", info.get("status", "unknown"))).lower()
