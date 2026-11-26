@@ -66,12 +66,12 @@ for dir in "/lib/modules/$KERNEL_RELEASE" "/usr/lib/modules/$KERNEL_RELEASE"; do
     log "Kernel module directory visible: $dir"
     if [ -r "$dir/modules.dep" ]; then
       log "Relevant modules.dep entries in $dir:"
-      grep -E '(^|/)(nf_tables|nft_chain_nat|nft_nat|nft_masq|nf_conntrack|ip_tables|iptable_filter|iptable_nat)\\.ko([.]|:)' "$dir/modules.dep" || log "  No matching modules.dep entries"
+      grep -E '(^|/)(nf_tables|nft_chain_nat|nft_nat|nft_masq|nf_conntrack|ip_tables|iptable_filter|iptable_nat)\.ko([.]|:)' "$dir/modules.dep" || log "  No matching modules.dep entries"
     else
       log "No readable modules.dep in $dir"
     fi
     log "Matching module files in $dir:"
-    find "$dir" -type f \\( -name 'nf_tables.ko*' -o -name 'nft_chain_nat.ko*' -o -name 'nft_nat.ko*' -o -name 'nft_masq.ko*' -o -name 'nf_conntrack.ko*' -o -name 'ip_tables.ko*' -o -name 'iptable_filter.ko*' -o -name 'iptable_nat.ko*' \\) -print
+    find "$dir" -type f \( -name 'nf_tables.ko*' -o -name 'nft_chain_nat.ko*' -o -name 'nft_nat.ko*' -o -name 'nft_masq.ko*' -o -name 'nf_conntrack.ko*' -o -name 'ip_tables.ko*' -o -name 'iptable_filter.ko*' -o -name 'iptable_nat.ko*' \) -print
   fi
 done
 if [ "${#MODULE_DIRS[@]}" -eq 0 ]; then
