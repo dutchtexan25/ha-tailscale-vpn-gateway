@@ -16,16 +16,18 @@ privileged:
   - NET_RAW
 kernel_modules: true
 ports:
-  41641/udp: 41641
+  41641/udp: 41642
 options:
   nordvpn_token: ""
   nordvpn_target: San_Francisco
   tailscale_auth_key: ""
   tailscale_hostname: ha-nordvpn-gateway
   reconnect_after_hours: 168
+  advertise_exit_node: false
 schema:
   nordvpn_token: password?
   nordvpn_target: str
   tailscale_auth_key: password?
   tailscale_hostname: str
   reconnect_after_hours: int(1,720)
+  advertise_exit_node: bool
