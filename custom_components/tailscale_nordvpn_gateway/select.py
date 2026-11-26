@@ -6,7 +6,6 @@ import asyncio
 from homeassistant.components.select import SelectEntity
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .api import GatewayApiError
 from .const import DOMAIN
 from .entity import GatewayEntity
 
@@ -30,7 +29,8 @@ class NordVpnTargetSelect(GatewayEntity, SelectEntity):
 
     @property
     def current_option(self):
-        return str(self.coordinator.data.get("target", "auto"))
+        current = str(self.coordinator.data.get("target", "auto"))
+        return current if current in self.options else "auto"
 
     async def async_added_to_hass(self):
         await super().async_added_to_hass()
@@ -49,16 +49,19 @@ class NordVpnTargetSelect(GatewayEntity, SelectEntity):
                     city_name = str(city.get("name", "")).strip()
                     if city_name:
                         options.add(city_name.replace(" ", "_"))
+            current = str(self.coordinator.data.get("target", "auto"))
+            options.add(current)
             self._attr_options = sorted(options, key=str.casefold)
             self.async_write_ha_state()
-        except Exception:
-            # Keep the current target selectable even if NordVPN's directory is unavailable.
-            current = self.current_option
+        except (OSError, asyncio.TimeoutError, ValueError):
+            current = str(self.coordinator.data.get("target", "auto"))
             self._attr_options = sorted(set(self._attr_options + [current]), key=str.casefold)
 
     async def async_select_option(self, option: str) -> None:
         if option not in self.options:
             raise ValueError("Unsupported NordVPN target")
         await self.coordinator.api.set_options({"nordvpn_target": option})
+        self.coordinator.async_set_updated_data(
+            {**self.coordinator.data, "target": option}
+        )
         await self.coordinator.api.restart()
-        await self.coordinator.async_request_refresh()
