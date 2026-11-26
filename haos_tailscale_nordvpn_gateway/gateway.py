@@ -271,6 +271,37 @@ def start_tailscale():
     return daemon, sock
 
 
+def diagnose_nftables():
+    """Log a bounded, read-only snapshot of this container's nftables ruleset."""
+    try:
+        result = subprocess.run(
+            ["nft", "-a", "list", "ruleset"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+    except FileNotFoundError:
+        LOG.warning("Read-only nftables inspection unavailable: nft command not found.")
+        return
+
+    if result.returncode != 0:
+        detail = result.stderr.strip() or f"nft exited with status {result.returncode}"
+        LOG.warning("Read-only nftables inspection failed: %s", detail)
+        return
+
+    lines = result.stdout.splitlines()
+    if not lines:
+        LOG.warning("Read-only nftables inspection returned an empty ruleset.")
+        return
+
+    LOG.info("Read-only nftables ruleset follows (%d lines; maximum 120 shown):", len(lines))
+    for line in lines[:120]:
+        LOG.info("nft: %s", line)
+    if len(lines) > 120:
+        LOG.info("nft: output truncated; %d additional lines omitted.", len(lines) - 120)
+
+
 def advertise_exit_node(sock):
     install_gateway_rules()
     run(["tailscale", "--socket", sock, "set", "--advertise-exit-node"])
