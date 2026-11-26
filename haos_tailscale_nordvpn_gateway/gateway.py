@@ -154,39 +154,59 @@ def configure_wireguard(key, server):
     WG_CONF.chmod(0o600)
 
 
-def ensure_iptables_rule(table, chain, rule, position=None):
-    """Install a firewall rule once; reconnects must not grow duplicate rules."""
-    base = ["iptables", "-t", table]
-    check = subprocess.run(
-        base + ["-C", chain] + rule,
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-    )
-    if check.returncode == 0:
-        return
-    if position is None:
-        run(base + ["-A", chain] + rule)
-    else:
-        run(base + ["-I", chain, str(position)] + rule)
-
-
-def ensure_ip6tables_rule(chain, rule, position=None):
-    base = ["ip6tables"]
-    check = subprocess.run(
-        base + ["-C", chain] + rule,
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-    )
-    if check.returncode == 0:
-        return
-    if position is None:
-        run(base + ["-A", chain] + rule, check=False)
-    else:
-        run(base + ["-I", chain, str(position)] + rule, check=False)
-
-
 def install_gateway_rules():
+    """Install isolated nftables rules; never modify Tailscale's own tables."""
+    # Install firewall policy before adding the policy-routing rule. The
+    # dedicated table is evaluated after Tailscale's filter chains.
+    existing = subprocess.run(
+        ["nft", "list", "table", "inet", "ha_gateway"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+
+    if existing.returncode == 0:
+        # Flush only our own chains. Tailscale and Docker tables are untouched.
+        nft_script = """
+flush chain inet ha_gateway forward
+flush chain inet ha_gateway postrouting
+add rule inet ha_gateway forward iifname "tailscale0" oifname "wg0" meta nfproto ipv4 accept
+add rule inet ha_gateway forward iifname "tailscale0" drop
+add rule inet ha_gateway forward iifname "wg0" oifname "tailscale0" ct state established,related accept
+add rule inet ha_gateway forward iifname "wg0" oifname "tailscale0" drop
+add rule inet ha_gateway postrouting oifname "wg0" meta nfproto ipv4 masquerade
+"""
+    else:
+        nft_script = """
+table inet ha_gateway {
+    chain forward {
+        type filter hook forward priority filter + 10; policy accept;
+        iifname "tailscale0" oifname "wg0" meta nfproto ipv4 accept
+        iifname "tailscale0" drop
+        iifname "wg0" oifname "tailscale0" ct state established,related accept
+        iifname "wg0" oifname "tailscale0" drop
+    }
+    chain postrouting {
+        type nat hook postrouting priority srcnat + 10; policy accept;
+        oifname "wg0" meta nfproto ipv4 masquerade
+    }
+}
+"""
+    result = subprocess.run(
+        ["nft", "-f", "-"],
+        input=nft_script,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if result.returncode != 0:
+        detail = result.stderr.strip() or f"nft exited with status {result.returncode}"
+        raise RuntimeError(f"Could not install gateway nftables rules: {detail}")
+
     # Route only forwarded tailnet client packets to the VPN. Local app
     # traffic (including tailscaled and the WireGuard outer UDP socket)
-    # continues to use the Supervisor-provided eth0 default route.
+    # retains the Supervisor-provided default route.
     run(["ip", "route", "replace", "default", "dev", "wg0", "table", WG_TABLE])
     rules = run(["ip", "rule", "show"], capture=True).stdout
     if f"iif tailscale0 lookup {WG_TABLE}" not in rules:
@@ -194,25 +214,6 @@ def install_gateway_rules():
             "ip", "rule", "add", "priority", WG_RULE_PRIORITY,
             "iif", "tailscale0", "lookup", WG_TABLE,
         ])
-    # Fail closed: Tailscale-forwarded IPv4 packets can only leave via wg0.
-    ensure_iptables_rule(
-        "filter", "FORWARD", ["-i", "tailscale0", "-o", "wg0", "-j", "ACCEPT"], 1
-    )
-    ensure_iptables_rule(
-        "filter", "FORWARD", ["-i", "tailscale0", "-j", "DROP"], 2
-    )
-    ensure_iptables_rule(
-        "filter", "FORWARD",
-        ["-i", "wg0", "-o", "tailscale0", "-m", "conntrack",
-         "--ctstate", "ESTABLISHED,RELATED", "-j", "ACCEPT"], 1
-    )
-    ensure_iptables_rule(
-        "nat", "POSTROUTING", ["-o", "wg0", "-j", "MASQUERADE"]
-    )
-    # NordVPN does not provide IPv6 egress here. Explicitly block forwarded
-    # IPv6 from tailnet peers instead of allowing an ISP-route leak.
-    ensure_ip6tables_rule("FORWARD", ["-i", "tailscale0", "-j", "DROP"], 1)
-
 
 def tunnel_egress_ok():
     result = subprocess.run(
@@ -270,6 +271,37 @@ def start_tailscale():
     return daemon, sock
 
 
+def diagnose_nftables():
+    """Log a bounded, read-only snapshot of this container's nftables ruleset."""
+    try:
+        result = subprocess.run(
+            ["nft", "-a", "list", "ruleset"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+    except FileNotFoundError:
+        LOG.warning("Read-only nftables inspection unavailable: nft command not found.")
+        return
+
+    if result.returncode != 0:
+        detail = result.stderr.strip() or f"nft exited with status {result.returncode}"
+        LOG.warning("Read-only nftables inspection failed: %s", detail)
+        return
+
+    lines = result.stdout.splitlines()
+    if not lines:
+        LOG.warning("Read-only nftables inspection returned an empty ruleset.")
+        return
+
+    LOG.info("Read-only nftables ruleset follows (%d lines; maximum 120 shown):", len(lines))
+    for line in lines[:120]:
+        LOG.info("nft: %s", line)
+    if len(lines) > 120:
+        LOG.info("nft: output truncated; %d additional lines omitted.", len(lines) - 120)
+
+
 def advertise_exit_node(sock):
     install_gateway_rules()
     run(["tailscale", "--socket", sock, "set", "--advertise-exit-node"])
@@ -286,11 +318,12 @@ def main():
     signal.signal(signal.SIGTERM, handle_signal)
     signal.signal(signal.SIGINT, handle_signal)
     WG_DIR.mkdir(parents=True, exist_ok=True)
-    # Disable IPv6 forwarding inside this isolated app namespace. IPv4 exit
-    # traffic is the only supported path in this first version.
-    run(["sysctl", "-w", "net.ipv6.conf.all.forwarding=0"], check=False)
+    # Do not attempt to change sysctls: HAOS may expose them read-only to apps.
+    # IPv6 forwarding from tailnet clients is blocked explicitly by ip6tables
+    # in install_gateway_rules(); failure to install that rule aborts advertising.
     connect_vpn()
     daemon, sock = start_tailscale()
+    diagnose_nftables()
     if ADVERTISE_EXIT_NODE:
         advertise_exit_node(sock)
     else:
