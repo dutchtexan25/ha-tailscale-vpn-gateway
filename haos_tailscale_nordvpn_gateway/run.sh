@@ -26,6 +26,9 @@ export TAILSCALE_HOSTNAME="$(option tailscale_hostname)"
 export RECONNECT_AFTER_HOURS="$(option reconnect_after_hours)"
 export ADVERTISE_EXIT_NODE="$(option advertise_exit_node)"
 
+# Tailscale supports its native nftables netlink backend; avoid legacy iptables.
+export TS_DEBUG_FIREWALL_MODE=nftables
+
 log() { printf '[gateway] %s\n' "$*"; }
 
 if [ ! -c /dev/net/tun ]; then
