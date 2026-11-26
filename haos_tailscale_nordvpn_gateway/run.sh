@@ -48,6 +48,36 @@ IPV6_FORWARDING="$(cat /proc/sys/net/ipv6/conf/all/forwarding 2>/dev/null || ech
 log "Host IPv4 forwarding: $IPV4_FORWARDING"
 log "Host IPv6 forwarding: $IPV6_FORWARDING"
 
+# Read-only diagnostics for the host netfilter modules exposed to this app.
+# Do not attempt to load modules or alter host firewall state here.
+KERNEL_RELEASE="$(uname -r)"
+log "Kernel release: $KERNEL_RELEASE"
+log "iptables version/backend: $(iptables --version 2>&1 || echo unavailable)"
+if command -v nft >/dev/null 2>&1; then
+  log "nft version: $(nft --version 2>&1)"
+else
+  log "nft command: unavailable"
+fi
+
+MODULE_DIRS=()
+for dir in "/lib/modules/$KERNEL_RELEASE" "/usr/lib/modules/$KERNEL_RELEASE"; do
+  if [ -d "$dir" ]; then
+    MODULE_DIRS+=("$dir")
+    log "Kernel module directory visible: $dir"
+    if [ -r "$dir/modules.dep" ]; then
+      log "Relevant modules.dep entries in $dir:"
+      grep -E '(^|/)(nf_tables|nft_chain_nat|nft_nat|nft_masq|nf_conntrack|ip_tables|iptable_filter|iptable_nat)\\.ko([.]|:)' "$dir/modules.dep" || log "  No matching modules.dep entries"
+    else
+      log "No readable modules.dep in $dir"
+    fi
+    log "Matching module files in $dir:"
+    find "$dir" -type f \\( -name 'nf_tables.ko*' -o -name 'nft_chain_nat.ko*' -o -name 'nft_nat.ko*' -o -name 'nft_masq.ko*' -o -name 'nf_conntrack.ko*' -o -name 'ip_tables.ko*' -o -name 'iptable_filter.ko*' -o -name 'iptable_nat.ko*' \\) -print
+  fi
+done
+if [ "${#MODULE_DIRS[@]}" -eq 0 ]; then
+  log "No /lib/modules or /usr/lib/modules directory for kernel $KERNEL_RELEASE is visible in the app."
+fi
+
 # Forwarding is only required when this app is configured to advertise an
 # exit node. Fail closed if the host is not already in the expected state.
 if [ "$ADVERTISE_EXIT_NODE" = "true" ]; then
