@@ -203,6 +203,7 @@ table inet ha_gateway {
     if result.returncode != 0:
         detail = result.stderr.strip() or f"nft exited with status {result.returncode}"
         raise RuntimeError(f"Could not install gateway nftables rules: {detail}")
+    LOG.info("Gateway nftables policy installed: IPv4 Tailscale traffic is restricted to wg0.")
 
     # Route only forwarded tailnet client packets to the VPN. Local app
     # traffic (including tailscaled and the WireGuard outer UDP socket)
@@ -304,6 +305,8 @@ def diagnose_nftables():
 
 def advertise_exit_node(sock):
     install_gateway_rules()
+    # Capture the resulting rules only after our own policy has been installed.
+    diagnose_nftables()
     run(["tailscale", "--socket", sock, "set", "--advertise-exit-node"])
     LOG.info("Exit node advertised. Approve it in the Tailscale admin console.")
 
@@ -323,10 +326,10 @@ def main():
     # in install_gateway_rules(); failure to install that rule aborts advertising.
     connect_vpn()
     daemon, sock = start_tailscale()
-    diagnose_nftables()
     if ADVERTISE_EXIT_NODE:
         advertise_exit_node(sock)
     else:
+        diagnose_nftables()
         LOG.info("Exit-node advertising is disabled; VPN tunnel is up for initial validation.")
     LOG.info("Gateway ready; Home Assistant host routes are not modified.")
     rotate_at = time.monotonic() + ROTATE_HOURS * 3600
