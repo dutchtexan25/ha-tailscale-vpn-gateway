@@ -323,6 +323,7 @@ def main():
     # in install_gateway_rules(); failure to install that rule aborts advertising.
     connect_vpn()
     daemon, sock = start_tailscale()
+    diagnose_nftables()
     if ADVERTISE_EXIT_NODE:
         advertise_exit_node(sock)
     else:
