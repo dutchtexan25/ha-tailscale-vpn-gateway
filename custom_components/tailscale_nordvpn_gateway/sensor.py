@@ -1,7 +1,5 @@
 """Gateway status sensors."""
 from homeassistant.components.sensor import SensorEntity
-from homeassistant.const import EntityCategory
-from homeassistant.helpers.entity import DeviceInfo
 
 from .const import DOMAIN
 from .entity import GatewayEntity
@@ -9,12 +7,18 @@ from .entity import GatewayEntity
 
 async def async_setup_entry(hass, entry, async_add_entities):
     coordinator = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities([GatewayStatusSensor(coordinator, entry), GatewayIpSensor(coordinator, entry)])
+    async_add_entities(
+        [GatewayStatusSensor(coordinator, entry), GatewayIpSensor(coordinator, entry)]
+    )
 
 
 class GatewayStatusSensor(GatewayEntity, SensorEntity):
     _attr_name = "Add-on status"
     _attr_icon = "mdi:server-network"
+
+    def __init__(self, coordinator, entry):
+        super().__init__(coordinator, entry)
+        self._attr_unique_id = f"{entry.data['app_slug']}_status"
 
     @property
     def native_value(self):
@@ -32,6 +36,10 @@ class GatewayStatusSensor(GatewayEntity, SensorEntity):
 class GatewayIpSensor(GatewayEntity, SensorEntity):
     _attr_name = "NordVPN public IP"
     _attr_icon = "mdi:ip-network"
+
+    def __init__(self, coordinator, entry):
+        super().__init__(coordinator, entry)
+        self._attr_unique_id = f"{entry.data['app_slug']}_public_ip"
 
     @property
     def native_value(self):
