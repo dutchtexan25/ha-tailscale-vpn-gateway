@@ -7,6 +7,7 @@ RUN apk add --no-cache \
     iproute2 \
     iptables \
     ip6tables \
+    nftables \
     python3 \
     py3-requests \
     wireguard-tools
