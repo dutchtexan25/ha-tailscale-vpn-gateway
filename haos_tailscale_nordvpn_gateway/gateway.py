@@ -170,6 +170,7 @@ def ensure_iptables_rule(table, chain, rule, position=None):
 
 
 def ensure_ip6tables_rule(chain, rule, position=None):
+    """Install and require the IPv6 firewall rule; never silently skip the block."""
     base = ["ip6tables"]
     check = subprocess.run(
         base + ["-C", chain] + rule,
@@ -178,9 +179,9 @@ def ensure_ip6tables_rule(chain, rule, position=None):
     if check.returncode == 0:
         return
     if position is None:
-        run(base + ["-A", chain] + rule, check=False)
+        run(base + ["-A", chain] + rule)
     else:
-        run(base + ["-I", chain, str(position)] + rule, check=False)
+        run(base + ["-I", chain, str(position)] + rule)
 
 
 def install_gateway_rules():
@@ -286,9 +287,9 @@ def main():
     signal.signal(signal.SIGTERM, handle_signal)
     signal.signal(signal.SIGINT, handle_signal)
     WG_DIR.mkdir(parents=True, exist_ok=True)
-    # Disable IPv6 forwarding inside this isolated app namespace. IPv4 exit
-    # traffic is the only supported path in this first version.
-    run(["sysctl", "-w", "net.ipv6.conf.all.forwarding=0"], check=False)
+    # Do not attempt to change sysctls: HAOS may expose them read-only to apps.
+    # IPv6 forwarding from tailnet clients is blocked explicitly by ip6tables
+    # in install_gateway_rules(); failure to install that rule aborts advertising.
     connect_vpn()
     daemon, sock = start_tailscale()
     if ADVERTISE_EXIT_NODE:
