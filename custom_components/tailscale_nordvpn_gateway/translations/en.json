@@ -1,0 +1,16 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to Tailscale NordVPN Gateway",
+        "description": "Discovers the installed add-on through the Home Assistant Supervisor API."
+      }
+    },
+    "abort": {
+      "already_configured": "The gateway integration is already configured."
+    },
+    "error": {
+      "cannot_connect": "Cannot find the gateway add-on or contact the Supervisor API."
+    }
+  }
+}
