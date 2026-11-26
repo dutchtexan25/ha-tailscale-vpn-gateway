@@ -1,5 +1,5 @@
 name: Tailscale NordVPN Exit Gateway
-version: 0.1.3
+version: 0.1.4
 slug: tailscale_nordvpn_gateway
 description: Tailscale exit node with NordVPN NordLynx egress, isolated from the Home Assistant host network.
 url: https://github.com/dutchtexan25/ha-tailscale-vpn-gateway/tree/haos-nordvpn-wg/haos_tailscale_nordvpn_gateway
