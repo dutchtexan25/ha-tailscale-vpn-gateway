@@ -24,12 +24,13 @@ class GatewayCoordinator(DataUpdateCoordinator):
 
     async def _async_update_data(self) -> dict:
         try:
-            info, options, logs = await asyncio.gather(
-                self.api.get_info(), self.api.get_options(), self.api.get_logs()
+            info, logs = await asyncio.gather(
+                self.api.get_info(), self.api.get_logs()
             )
         except GatewayApiError as err:
             raise UpdateFailed(str(err)) from err
 
+        options = info.get("options", {})
         state = str(info.get("state", info.get("status", "unknown"))).lower()
         ip_match = re.findall(
             r"NordVPN egress check passed \(public IP ([0-9a-fA-F:.]+)\)", logs
