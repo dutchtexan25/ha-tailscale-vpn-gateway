@@ -262,6 +262,8 @@ def start_tailscale():
     up = ["tailscale", "--socket", sock, "up", "--hostname", HOSTNAME, "--accept-dns=false"]
     if AUTH_KEY:
         up += ["--auth-key", AUTH_KEY]
+    if ADVERTISE_EXIT_NODE:
+        up += ["--advertise-exit-node"]
     run(up)
     for _ in range(60):
         if subprocess.run(["ip", "link", "show", "tailscale0"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0:
