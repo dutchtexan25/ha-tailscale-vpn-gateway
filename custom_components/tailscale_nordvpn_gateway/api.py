@@ -84,7 +84,22 @@ class GatewayApi:
         await self._request("POST", f"/addons/{self.app_slug}/restart", json={})
 
     async def get_logs(self) -> str:
-        data = await self._request("GET", f"/addons/{self.app_slug}/logs/latest")
-        if isinstance(data, str):
-            return data
-        return str(data.get("logs", data.get("message", "")))
+        if not self._token:
+            raise GatewayApiError("Supervisor token is unavailable")
+        headers = {"Authorization": f"Bearer {self._token}"}
+        try:
+            async with asyncio.timeout(20):
+                async with self._session.get(
+                    f"{SUPERVISOR_URL}/addons/{self.app_slug}/logs/latest",
+                    headers=headers,
+                ) as response:
+                    text = await response.text()
+                    if response.status >= 400:
+                        raise GatewayApiError(
+                            f"Supervisor logs API returned {response.status}: {text[:300]}"
+                        )
+                    return text
+        except GatewayApiError:
+            raise
+        except (ClientError, TimeoutError) as err:
+            raise GatewayApiError(f"Cannot read gateway logs: {err}") from err
