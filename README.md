@@ -279,3 +279,34 @@ docker compose logs -f tailscale
 # Get a shell in the tailscale container
 docker compose exec tailscale /bin/sh
 ```
+
+## Home Assistant integration
+
+This repository also contains a custom Home Assistant integration in
+`custom_components/tailscale_nordvpn_gateway`. It uses the Home Assistant
+Supervisor API from inside Home Assistant Core; it does not expose a new
+network port or require Docker access.
+
+The integration discovers the installed **Tailscale NordVPN Exit Gateway**
+add-on and provides:
+- add-on status and the last NordVPN egress IP reported in its logs;
+- a NordVPN country/city selector;
+- an exit-node advertising switch;
+- a gateway restart button.
+
+Changing the NordVPN location or exit-node setting updates only that add-on
+option and restarts that add-on. It does not change the separate original
+Tailscale add-on.
+
+### Install with HACS
+
+1. In HACS, open **Integrations** and choose **Custom repositories**.
+2. Add this repository URL:
+   `https://github.com/dutchtexan25/ha-tailscale-vpn-gateway`
+3. Select category **Integration**, then install **Tailscale NordVPN Gateway**.
+4. Restart Home Assistant.
+5. Add the **Tailscale NordVPN Gateway** integration from **Settings → Devices & services → Add integration**.
+
+The integration requires the gateway add-on to already be installed and
+running. It discovers the add-on using the Supervisor API and does not ask
+for or store the NordVPN or Tailscale credentials.
