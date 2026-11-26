@@ -1,0 +1,6 @@
+{
+  "name": "Tailscale NordVPN Gateway",
+  "render_readme": true,
+  "domains": ["tailscale_nordvpn_gateway"],
+  "homeassistant": "2024.6.0"
+}
