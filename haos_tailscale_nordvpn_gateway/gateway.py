@@ -260,11 +260,21 @@ def start_tailscale():
             raise RuntimeError("tailscaled exited during startup.")
         time.sleep(1)
     up = ["tailscale", "--socket", sock, "up", "--hostname", HOSTNAME, "--accept-dns=false"]
-    if AUTH_KEY:
+    # A persisted state file means this node is already authenticated. Do not
+    # resend the auth key on restarts: it is unnecessary and may be echoed by
+    # Tailscale in error output.
+    if AUTH_KEY and not (TS_STATE.is_file() and TS_STATE.stat().st_size > 0):
         up += ["--auth-key", AUTH_KEY]
-    if ADVERTISE_EXIT_NODE:
-        up += ["--advertise-exit-node"]
-    run(up)
+    # Always state the boolean explicitly. Tailscale requires all previously
+    # configured non-default flags to be mentioned on subsequent 'up' calls.
+    up += [f"--advertise-exit-node={str(ADVERTISE_EXIT_NODE).lower()}"]
+    try:
+        run(up)
+    except subprocess.CalledProcessError:
+        raise RuntimeError(
+            "Tailscale failed to apply its startup settings; command details "
+            "are suppressed to protect authentication credentials."
+        ) from None
     for _ in range(60):
         if subprocess.run(["ip", "link", "show", "tailscale0"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0:
             break
