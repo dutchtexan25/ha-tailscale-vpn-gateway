@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.8
+
+- Explicitly pass the exit-node advertising boolean on every Tailscale startup.
+- Avoid resending a Tailscale auth key when persisted node state is available.
+- Suppress command details on Tailscale startup errors to avoid exposing credentials.
+
 ## 0.1.0
 
 - Initial experimental HAOS app implementation.
